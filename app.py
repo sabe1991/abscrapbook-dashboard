@@ -125,6 +125,7 @@ def build_theme_css(theme_mode: str) -> str:
         border-radius: 10px;
         margin-bottom: 0.35rem;
         padding: 0.7rem 1.1rem !important;
+        gap: 2px !important;
       }}
       /* .sb-tab(フォルダ色タブ)は絶対配置でカード全体(枠付きの stVerticalBlock)の
          左端いっぱいに伸ばしたいが、st.markdown()が生成する中間の
@@ -133,16 +134,16 @@ def build_theme_css(theme_mode: str) -> str:
          そのため、.sb-tab を含む stElementContainer だけ position を打ち消し、
          基準が1つ上のカード(border付きstVerticalBlock、position: relative)まで
          突き抜けるようにしている。あわせて、この要素自体は高さ0でも
-         Streamlitの行間ギャップ(16px)が次の要素との間に確保されてカード上部の余白が
-         不自然に広くなるため、margin-bottomで打ち消している。 */
+         カード側のgap(上で6pxに指定)が次の要素との間に確保されてしまうため、
+         margin-bottomで打ち消している(タブは見た目上の行を持たないため0でよい)。 */
       div[data-testid="stElementContainer"]:has(.sb-tab) {{
         position: static !important;
-        margin-bottom: -16px !important;
+        margin-bottom: -2px !important;
       }}
       .sb-tab {{
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 5px;
+        width: 8px;
       }}
       hr {{ border-color: var(--border) !important; }}
       small, [data-testid="stCaptionContainer"] {{ color: var(--ink-faint) !important; }}
@@ -172,7 +173,7 @@ def build_theme_css(theme_mode: str) -> str:
       .sb-title:hover {{ text-decoration: underline; }}
       .sb-meta {{ color: var(--ink-faint) !important; font-size: 0.82rem; text-align: right; }}
       .sb-excerpt {{
-        color: var(--ink-soft) !important; font-size: 0.88rem; margin-top: 2px;
+        color: var(--ink-soft) !important; font-size: 0.88rem;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }}
     </style>
@@ -541,7 +542,7 @@ for a in page_articles:
         if excerpt:
             # summary はAI要約(最大3行の箇条書き、AB Scrapbook側のTHREE_BULLETS出力)、
             # excerpt は1行要約(ONE_BULLET)。複数行あるときは1行ずつ表示する。
-            lines = [ln.strip() for ln in excerpt.splitlines() if ln.strip()]
+            lines = [ln.strip().lstrip("*・-•").strip() for ln in excerpt.splitlines() if ln.strip()]
             if len(lines) > 1:
                 html = "".join(f'<div class="sb-excerpt">・{escape(ln)}</div>' for ln in lines)
             else:
