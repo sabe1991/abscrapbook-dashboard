@@ -1,0 +1,88 @@
+{
+  "formatVersion": 1,
+  "generatedAt": "2026-08-13T00:00:00Z",
+  "collections": [
+    { "id": 1, "name": "テック" },
+    { "id": 2, "name": "料理" },
+    { "id": 3, "name": "旅行" }
+  ],
+  "articles": [
+    {
+      "id": 1,
+      "title": "Kotlin coroutines の構造化された並行性、実務でどう活きるか",
+      "excerpt": "supervisorScope と coroutineScope の使い分けを、実際のクラッシュ事例から解説。",
+      "summary": "supervisorScope と coroutineScope の使い分けを、実際のクラッシュ事例から解説。",
+      "url": "https://example.com/articles/kotlin-structured-concurrency",
+      "savedAt": 1755000000000,
+      "collectionId": 1,
+      "siteName": "Zenn",
+      "tags": ["Kotlin", "非同期処理"]
+    },
+    {
+      "id": 2,
+      "title": "圧力鍋で作る、失敗しない豚の角煮",
+      "excerpt": "下茹で不要、圧力鍋20分で驚くほど柔らかい角煮になる手順まとめ。",
+      "summary": "下茹で不要、圧力鍋20分で驚くほど柔らかい角煮になる手順まとめ。",
+      "url": "https://example.com/articles/pressure-cooker-pork",
+      "savedAt": 1754913600000,
+      "collectionId": 2,
+      "siteName": "白ごはん.com",
+      "tags": ["レシピ", "豚肉"]
+    },
+    {
+      "id": 3,
+      "title": "台北の朝市を歩く、地元民に混ざる旅の作法",
+      "excerpt": "南門市場と迪化街、時間帯別の楽しみ方と写真映えする一角。",
+      "summary": "南門市場と迪化街、時間帯別の楽しみ方と写真映えする一角。",
+      "url": "https://example.com/articles/taipei-morning-market",
+      "savedAt": 1754827200000,
+      "collectionId": 3,
+      "siteName": "note",
+      "tags": ["台湾", "旅行記"]
+    },
+    {
+      "id": 4,
+      "title": "オンデバイスAIの推論速度、Gemini Nano と NPU の相性",
+      "excerpt": "AICore 経由の推論がどこまで速くなるか、実機ベンチマークで検証。",
+      "summary": "AICore 経由の推論がどこまで速くなるか、実機ベンチマークで検証。",
+      "url": "https://example.com/articles/gemini-nano-npu-benchmark",
+      "savedAt": 1754740800000,
+      "collectionId": 1,
+      "siteName": "Qiita",
+      "tags": ["AI", "Android"]
+    },
+    {
+      "id": 5,
+      "title": "梅干し作り、天日干し3日間の見極め方",
+      "excerpt": "赤紫蘇を入れるタイミングと、土用干しで失敗しないコツ。",
+      "summary": "赤紫蘇を入れるタイミングと、土用干しで失敗しないコツ。",
+      "url": "https://example.com/articles/umeboshi-sun-drying",
+      "savedAt": 1754568000000,
+      "collectionId": 2,
+      "siteName": "うちのごはん日記",
+      "tags": ["レシピ", "保存食"]
+    },
+    {
+      "id": 6,
+      "title": "自宅ネットワークをVLANで切る、実例つき設定ガイド",
+      "excerpt": "IoT機器を隔離するための最小構成、家庭用ルーターでもできる範囲で。",
+      "summary": "IoT機器を隔離するための最小構成、家庭用ルーターでもできる範囲で。",
+      "url": "https://example.com/articles/home-vlan-guide",
+      "savedAt": 1754395200000,
+      "collectionId": null,
+      "siteName": "Zenn",
+      "tags": ["ネットワーク"]
+    },
+    {
+      "id": 7,
+      "title": "京都、観光客の少ない紅葉スポット5選",
+      "excerpt": "混雑を避けたい人向けに、穴場だけを厳選して回るモデルコース。",
+      "summary": "混雑を避けたい人向けに、穴場だけを厳選して回るモデルコース。",
+      "url": "https://example.com/articles/kyoto-autumn-leaves",
+      "savedAt": 1754136000000,
+      "collectionId": 3,
+      "siteName": "たびねす",
+      "tags": ["旅行記", "紅葉"]
+    }
+  ]
+}

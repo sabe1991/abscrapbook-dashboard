@@ -30,7 +30,12 @@ import streamlit as st
 from github_client import RepoConfig, get_json, put_json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SAMPLE = os.path.join(HERE, "..", "sample-data", "latest.json")
+# ローカル開発時は dashboard/ の1つ上(プロジェクト直下)、
+# 公開用リポジトリでは app.py と同じ階層に sample-data/ を置く運用なので両方を探す。
+SAMPLE_CANDIDATES = [
+    os.path.join(HERE, "..", "sample-data", "latest.json"),
+    os.path.join(HERE, "sample-data", "latest.json"),
+]
 DATA_PATH = "latest.json"
 
 FOLDER_ALL = "__all__"
@@ -94,8 +99,18 @@ def load_data() -> tuple[dict, str]:
             return fetch_data(cfg), "GitHub"
         except Exception as e:
             st.error(f"GitHubからの記事データ取得に失敗しました: {e}")
-    with open(SAMPLE, encoding="utf-8") as f:
-        return json.load(f), "サンプルデータ(ローカル)"
+    for sample_path in SAMPLE_CANDIDATES:
+        try:
+            with open(sample_path, encoding="utf-8") as f:
+                return json.load(f), "サンプルデータ(ローカル)"
+        except FileNotFoundError:
+            continue
+    st.error(
+        "GitHubの接続設定(secrets)がまだ登録されていません。\n\n"
+        "デプロイ先アプリの **Settings → Secrets** に `[github_data]` "
+        "(`repo`・`branch`・`token`)を設定してください。手順は `デプロイ手順.md` の「3. アプリを公開する」を参照してください。"
+    )
+    st.stop()
 
 
 def queue_command(command: dict) -> bool:
