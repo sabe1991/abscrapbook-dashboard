@@ -124,7 +124,7 @@ def build_theme_css(theme_mode: str) -> str:
         border: 1px solid var(--border) !important;
         border-radius: 10px;
         margin-bottom: 0.35rem;
-        padding: 0.7rem 1.1rem !important;
+        padding: 0.7rem 1.1rem 0.7rem 1.9rem !important;
         gap: 2px !important;
       }}
       /* .sb-tab(フォルダ色タブ)は絶対配置でカード全体(枠付きの stVerticalBlock)の
@@ -143,7 +143,7 @@ def build_theme_css(theme_mode: str) -> str:
       .sb-tab {{
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 8px;
+        width: 24px;
       }}
       hr {{ border-color: var(--border) !important; }}
       small, [data-testid="stCaptionContainer"] {{ color: var(--ink-faint) !important; }}
