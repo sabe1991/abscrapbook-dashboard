@@ -94,6 +94,12 @@ def build_theme_css(theme_mode: str) -> str:
         color: var(--ink-faint) !important;
         opacity: 1 !important;
       }}
+      /* Streamlitのアイコン(⋯の隣の矢印等)は専用フォント(リガチャで絵柄に変わる)で
+         描画されるため、上の日本語フォント強制指定から除外しないと文字("expand_more"等)の
+         ままになってしまう。 */
+      [data-testid="stIconMaterial"] {{
+        font-family: "Material Symbols Rounded" !important;
+      }}
       h1 {{
         font-family: "Hiragino Mincho ProN", "Yu Mincho", "Iowan Old Style", Georgia, serif !important;
         letter-spacing: 0.01em;
@@ -105,11 +111,34 @@ def build_theme_css(theme_mode: str) -> str:
       }}
       .block-container {{ padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1320px; }}
 
-      div[data-testid="stVerticalBlockBorderWrapper"] {{
-        background: var(--surface);
-        border-color: var(--border) !important;
+      /* st.container(border=True) の枠。Streamlitはこの用途専用のdata-testidを廃止しており、
+         枠付き/枠無しどちらも同じ data-testid="stVerticalBlock" になるため、実際に枠が
+         付いているものだけが持つ内部クラス名(st-emotion-cache-1nk6pcg。Streamlitの
+         バージョンが上がると変わる可能性がある)で区別している。もし将来また枠が消えたら、
+         ブラウザの開発者ツールでカードのdivを検証し、実際に border が付いているクラス名に
+         ここを更新すること。requirements.txt でバージョンを固定しているのはこのため。 */
+      div[data-testid="stVerticalBlock"].st-emotion-cache-1nk6pcg {{
+        position: relative;
+        overflow: hidden;
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
         border-radius: 10px;
         margin-bottom: 0.35rem;
+      }}
+      /* .sb-tab(フォルダ色タブ)は絶対配置でカード全体(枠付きの stVerticalBlock)の
+         左端いっぱいに伸ばしたいが、st.markdown()が生成する中間の
+         data-testid="stElementContainer" が position: relative かつ高さ0で挟まっており、
+         これが絶対配置の基準(containing block)にされてしまうとタブの高さが0に潰れる。
+         そのため、.sb-tab を含む stElementContainer だけ position を打ち消し、
+         基準が1つ上のカード(border付きstVerticalBlock、position: relative)まで
+         突き抜けるようにしている。 */
+      div[data-testid="stElementContainer"]:has(.sb-tab) {{
+        position: static !important;
+      }}
+      .sb-tab {{
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 5px;
       }}
       hr {{ border-color: var(--border) !important; }}
       small, [data-testid="stCaptionContainer"] {{ color: var(--ink-faint) !important; }}
@@ -132,8 +161,9 @@ def build_theme_css(theme_mode: str) -> str:
       }}
 
       .sb-title {{
-        display: block; font-weight: 600; font-size: 1.02rem; text-decoration: none; color: var(--ink);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+        font-weight: 600; font-size: 1.02rem; text-decoration: none; color: var(--ink);
+        overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
       }}
       .sb-title:hover {{ text-decoration: underline; }}
       .sb-meta {{ color: var(--ink-faint); font-size: 0.82rem; text-align: right; }}
@@ -227,7 +257,20 @@ def queue_command(command: dict) -> bool:
 
 def format_date(saved_at_millis: int) -> str:
     dt = datetime.fromtimestamp(saved_at_millis / 1000, tz=timezone.utc).astimezone()
-    return dt.strftime("%m/%d")
+    return dt.strftime("%Y/%m/%d")
+
+
+# デザインモックアップの「カード左端の帯の色でフォルダを見分ける」表現を再現する配色。
+# ドラッグ&ドロップ自体は実装しない(TODO.md #6)が、色分けだけは独立して再現できる。
+FOLDER_TAB_PALETTE = ["#2f6f63", "#b3893f", "#4a72a8", "#7a5ba0", "#a34e69", "#4f7a3f", "#3f6b7a", "#8a5a30"]
+FOLDER_TAB_NEUTRAL = "#8b938c"
+
+
+def folder_tab_color(collection_id, collection_ids_sorted: list) -> str:
+    if collection_id is None or collection_id not in collection_ids_sorted:
+        return FOLDER_TAB_NEUTRAL
+    idx = collection_ids_sorted.index(collection_id)
+    return FOLDER_TAB_PALETTE[idx % len(FOLDER_TAB_PALETTE)]
 
 
 # ---- 画面 ----
@@ -433,9 +476,13 @@ def render_pagination(position: str) -> None:
 render_pagination("top")
 
 move_options = [FOLDER_UNCLASSIFIED] + [c["id"] for c in backup["collections"]]
+collection_ids_sorted = sorted(c["id"] for c in backup["collections"])
 
 for a in page_articles:
     with st.container(border=True):
+        tab_color = folder_tab_color(a["collectionId"], collection_ids_sorted)
+        st.markdown(f'<div class="sb-tab" style="background:{tab_color}"></div>', unsafe_allow_html=True)
+
         cols = st.columns([9, 1.6, 1], vertical_alignment="center")
 
         with cols[0]:
