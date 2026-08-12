@@ -43,22 +43,104 @@ FOLDER_UNCLASSIFIED = "__unclassified__"
 
 st.set_page_config(page_title="スクラップブックダッシュボード", page_icon=":material/bookmarks:", layout="wide")
 
-st.markdown(
-    """
+# デザイン案(モックアップ)で承認した配色・タイポグラフィをここで再現する。
+# ライト/ダークそれぞれの色をCSS変数として定義し、"自動"時はOSの配色設定(prefers-color-scheme)に
+# 追従、ライト/ダークを明示選択した場合はそちらを強制する。
+PALETTE = {
+    "light": {
+        "bg": "#e7ebe1", "surface": "#ffffff", "surface-2": "#edf1e7",
+        "ink": "#1e2321", "ink-soft": "#565f5a", "ink-faint": "#6e766f",
+        "border": "#c6d0bd", "border-strong": "#a3b096",
+        "accent": "#235c4e", "accent-ink": "#ffffff",
+        "accent-soft": "#cde5da", "accent-soft-ink": "#17453a",
+    },
+    "dark": {
+        "bg": "#141715", "surface": "#1d211e", "surface-2": "#242926",
+        "ink": "#e9ece7", "ink-soft": "#a7b0a9", "ink-faint": "#838b84",
+        "border": "#333a35", "border-strong": "#454e47",
+        "accent": "#6fbfae", "accent-ink": "#0d1210",
+        "accent-soft": "#223531", "accent-soft-ink": "#a8e0d1",
+    },
+}
+
+
+def _css_vars(palette: dict) -> str:
+    return " ".join(f"--{k}: {v};" for k, v in palette.items())
+
+
+def build_theme_css(theme_mode: str) -> str:
+    if theme_mode == "ライト":
+        root_block = f":root {{ {_css_vars(PALETTE['light'])} }}"
+    elif theme_mode == "ダーク":
+        root_block = f":root {{ {_css_vars(PALETTE['dark'])} }}"
+    else:
+        root_block = (
+            f":root {{ {_css_vars(PALETTE['light'])} }}"
+            f"@media (prefers-color-scheme: dark) {{ :root {{ {_css_vars(PALETTE['dark'])} }} }}"
+        )
+    return f"""
     <style>
-      .block-container { padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1100px; }
-      div[data-testid="stVerticalBlockBorderWrapper"] { margin-bottom: 0.35rem; }
-      .sb-title { font-weight: 600; font-size: 1.02rem; text-decoration: none; color: inherit; }
-      .sb-title:hover { text-decoration: underline; }
-      .sb-meta { color: var(--text-color-secondary, #808080); font-size: 0.82rem; text-align: right; }
-      .sb-excerpt {
-        color: var(--text-color-secondary, #808080); font-size: 0.88rem; margin-top: 2px;
+      {root_block}
+
+      html, body, .stApp {{ background: var(--bg); color: var(--ink); }}
+      .stApp, .stApp p, .stApp span, .stApp label {{
+        font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", -apple-system, "Segoe UI", Roboto, sans-serif;
+      }}
+      h1 {{
+        font-family: "Hiragino Mincho ProN", "Yu Mincho", "Iowan Old Style", Georgia, serif !important;
+        letter-spacing: 0.01em;
+        color: var(--ink) !important;
+      }}
+      section[data-testid="stSidebar"] {{
+        background: var(--surface-2);
+        border-right: 1px solid var(--border);
+      }}
+      .block-container {{ padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1100px; }}
+
+      div[data-testid="stVerticalBlockBorderWrapper"] {{
+        background: var(--surface);
+        border-color: var(--border) !important;
+        border-radius: 10px;
+        margin-bottom: 0.35rem;
+      }}
+      hr {{ border-color: var(--border) !important; }}
+      small, [data-testid="stCaptionContainer"] {{ color: var(--ink-faint) !important; }}
+
+      button[kind="primary"], [data-testid="stBaseButton-primary"] {{
+        background: var(--accent) !important;
+        color: var(--accent-ink) !important;
+        border: none !important;
+      }}
+      button[kind="secondary"], [data-testid="stBaseButton-secondary"] {{
+        background: var(--surface) !important;
+        color: var(--ink) !important;
+        border: 1px solid var(--border-strong) !important;
+      }}
+
+      div[data-testid="stTextInput"] input {{
+        background: var(--surface);
+        color: var(--ink);
+        border-color: var(--border-strong) !important;
+      }}
+
+      .sb-title {{
+        display: block; font-weight: 600; font-size: 1.02rem; text-decoration: none; color: var(--ink);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      }
+      }}
+      .sb-title:hover {{ text-decoration: underline; }}
+      .sb-meta {{ color: var(--ink-faint); font-size: 0.82rem; text-align: right; }}
+      .sb-excerpt {{
+        color: var(--ink-soft); font-size: 0.88rem; margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }}
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+    """
+
+
+# 配色トグル(サイドバー)の値をCSS生成より先に読む。key="theme_mode"のウィジェット自体は
+# サイドバー描画時(このスクリプトの後半)に作るが、session_stateには前回の選択が
+# 既に反映されているため、ここで先読みしても正しい値が取れる。
+st.markdown(build_theme_css(st.session_state.get("theme_mode", "自動")), unsafe_allow_html=True)
 
 
 # ---- GitHub 連携の設定 ----
@@ -249,6 +331,14 @@ for a in arts:
 tag_options = sorted(tag_counts.keys(), key=lambda t: (-tag_counts[t], t))
 
 with st.sidebar:
+    st.radio(
+        "配色",
+        options=["自動", "ライト", "ダーク"],
+        key="theme_mode",
+        horizontal=True,
+    )
+    st.divider()
+
     query = st.text_input("検索", placeholder="タイトル・要約を検索", label_visibility="collapsed")
 
     st.subheader("フォルダ")
@@ -390,6 +480,13 @@ for a in page_articles:
 
         excerpt = a.get("summary") or a.get("excerpt") or ""
         if excerpt:
-            st.markdown(f'<div class="sb-excerpt">{escape(excerpt)}</div>', unsafe_allow_html=True)
+            # summary はAI要約(最大3行の箇条書き、AB Scrapbook側のTHREE_BULLETS出力)、
+            # excerpt は1行要約(ONE_BULLET)。複数行あるときは1行ずつ表示する。
+            lines = [ln.strip() for ln in excerpt.splitlines() if ln.strip()]
+            if len(lines) > 1:
+                html = "".join(f'<div class="sb-excerpt">・{escape(ln)}</div>' for ln in lines)
+            else:
+                html = f'<div class="sb-excerpt">{escape(lines[0] if lines else excerpt)}</div>'
+            st.markdown(html, unsafe_allow_html=True)
 
 render_pagination("bottom")
