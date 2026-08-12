@@ -292,14 +292,51 @@ visible = [a for a in arts if matches(a)]
 
 header_title = "すべての記事" if selected_folder == FOLDER_ALL else folder_names.get(selected_folder, "?")
 st.markdown(f"**{header_title}**")
-st.caption(f"{len(arts)}件中 {len(visible)}件を表示")
+
+# 記事が数千件規模になると、1件ごとにポップオーバー等の重いウィジェットを持つカードを
+# 一度に全件描画すると画面が固まったようになるため、ページ送りで表示件数を区切る。
+ARTICLES_PER_PAGE = 50
+filter_key = (selected_folder, tuple(sorted(selected_tags)), query.strip())
+if st.session_state.get("_filter_key") != filter_key:
+    st.session_state["_filter_key"] = filter_key
+    st.session_state["page"] = 1
+
+total_pages = max(1, -(-len(visible) // ARTICLES_PER_PAGE))
+page = min(max(st.session_state.get("page", 1), 1), total_pages)
+st.session_state["page"] = page
+page_start = (page - 1) * ARTICLES_PER_PAGE
+page_articles = visible[page_start : page_start + ARTICLES_PER_PAGE]
+
+st.caption(f"{len(arts)}件中 {len(visible)}件が該当({page}/{total_pages}ページ目、{len(page_articles)}件を表示)")
 
 if not visible:
     st.info("条件に一致する記事がありません。")
 
+
+def render_pagination(position: str) -> None:
+    if total_pages <= 1:
+        return
+    prev_col, mid_col, next_col = st.columns([1, 2, 1])
+    with prev_col:
+        if st.button("← 前へ", disabled=page <= 1, use_container_width=True, key=f"prev_{position}_{page}"):
+            st.session_state["page"] = page - 1
+            st.rerun()
+    with mid_col:
+        st.markdown(
+            f'<div style="text-align:center; padding-top:0.4rem;">{page} / {total_pages} ページ</div>',
+            unsafe_allow_html=True,
+        )
+    with next_col:
+        if st.button("次へ →", disabled=page >= total_pages, use_container_width=True, key=f"next_{position}_{page}"):
+            st.session_state["page"] = page + 1
+            st.rerun()
+
+
+render_pagination("top")
+
 move_options = [FOLDER_UNCLASSIFIED] + [c["id"] for c in backup["collections"]]
 
-for a in visible:
+for a in page_articles:
     with st.container(border=True):
         cols = st.columns([7, 2, 1], vertical_alignment="center")
 
@@ -354,3 +391,5 @@ for a in visible:
         excerpt = a.get("summary") or a.get("excerpt") or ""
         if excerpt:
             st.markdown(f'<div class="sb-excerpt">{escape(excerpt)}</div>', unsafe_allow_html=True)
+
+render_pagination("bottom")
