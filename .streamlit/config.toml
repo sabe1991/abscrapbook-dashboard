@@ -1,0 +1,9 @@
+# Streamlit自体の配色設定(公式の仕組み)。
+# デザインモックアップの配色(セージグリーン系)をアプリ全体のベースにする。
+# ここを設定しておくと、OS側がダーク設定でもStreamlitが勝手にダーク配色を選ばなくなり、
+# app.py側で用意した独自のCSS(カード・見出し等)と衝突して文字が読めなくなる事故を防げる。
+[theme]
+primaryColor = "#235c4e"
+backgroundColor = "#e7ebe1"
+secondaryBackgroundColor = "#edf1e7"
+textColor = "#1e2321"

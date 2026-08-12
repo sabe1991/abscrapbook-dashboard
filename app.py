@@ -86,6 +86,14 @@ def build_theme_css(theme_mode: str) -> str:
       .stApp, .stApp p, .stApp span, .stApp label {{
         font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", -apple-system, "Segoe UI", Roboto, sans-serif;
       }}
+      /* StreamlitはOSのダーク設定を見て自前で文字色を決めてしまうため、"自動/ライト/ダーク"の
+         切り替え(session_state.theme_mode)を効かせるには、この配下の文字色を強制で塗り直す必要がある。
+         (.streamlit/config.toml で基準色は合わせているが、切り替え時はこちらが優先される) */
+      .stApp, .stApp * {{ color: var(--ink) !important; }}
+      .stApp input::placeholder, .stApp textarea::placeholder {{
+        color: var(--ink-faint) !important;
+        opacity: 1 !important;
+      }}
       h1 {{
         font-family: "Hiragino Mincho ProN", "Yu Mincho", "Iowan Old Style", Georgia, serif !important;
         letter-spacing: 0.01em;
@@ -95,7 +103,7 @@ def build_theme_css(theme_mode: str) -> str:
         background: var(--surface-2);
         border-right: 1px solid var(--border);
       }}
-      .block-container {{ padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1100px; }}
+      .block-container {{ padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1320px; }}
 
       div[data-testid="stVerticalBlockBorderWrapper"] {{
         background: var(--surface);
@@ -428,7 +436,7 @@ move_options = [FOLDER_UNCLASSIFIED] + [c["id"] for c in backup["collections"]]
 
 for a in page_articles:
     with st.container(border=True):
-        cols = st.columns([7, 2, 1], vertical_alignment="center")
+        cols = st.columns([9, 1.6, 1], vertical_alignment="center")
 
         with cols[0]:
             st.markdown(
