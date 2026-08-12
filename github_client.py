@@ -30,8 +30,25 @@ def get_json(cfg: RepoConfig, path: str) -> tuple[dict | None, str | None]:
         return None, None
     resp.raise_for_status()
     body = resp.json()
-    content = base64.b64decode(body["content"]).decode("utf-8")
-    return json.loads(content), body["sha"]
+    sha = body["sha"]
+    if body.get("content"):
+        raw = base64.b64decode(body["content"])
+    else:
+        # Contents API は1MBを超えるファイルだと content が空になる仕様のため、
+        # その場合は Git Blobs API から取り直す(100MBまで対応)。
+        blob_resp = requests.get(
+            f"{API_BASE}/repos/{cfg.repo}/git/blobs/{sha}", headers=_headers(cfg), timeout=30
+        )
+        blob_resp.raise_for_status()
+        raw = base64.b64decode(blob_resp.json()["content"])
+    content = raw.decode("utf-8")
+    try:
+        return json.loads(content), sha
+    except json.JSONDecodeError as e:
+        preview = content[:200] if content else "(空)"
+        raise RuntimeError(
+            f"{path} の中身がJSONとして読めません({e})。ファイルの中身: {preview!r}"
+        ) from e
 
 
 def put_json(cfg: RepoConfig, path: str, data: dict, message: str, sha: str | None = None) -> None:
