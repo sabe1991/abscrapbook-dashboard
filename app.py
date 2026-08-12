@@ -124,6 +124,7 @@ def build_theme_css(theme_mode: str) -> str:
         border: 1px solid var(--border) !important;
         border-radius: 10px;
         margin-bottom: 0.35rem;
+        padding: 0.7rem 1.1rem !important;
       }}
       /* .sb-tab(フォルダ色タブ)は絶対配置でカード全体(枠付きの stVerticalBlock)の
          左端いっぱいに伸ばしたいが、st.markdown()が生成する中間の
@@ -131,9 +132,12 @@ def build_theme_css(theme_mode: str) -> str:
          これが絶対配置の基準(containing block)にされてしまうとタブの高さが0に潰れる。
          そのため、.sb-tab を含む stElementContainer だけ position を打ち消し、
          基準が1つ上のカード(border付きstVerticalBlock、position: relative)まで
-         突き抜けるようにしている。 */
+         突き抜けるようにしている。あわせて、この要素自体は高さ0でも
+         Streamlitの行間ギャップ(16px)が次の要素との間に確保されてカード上部の余白が
+         不自然に広くなるため、margin-bottomで打ち消している。 */
       div[data-testid="stElementContainer"]:has(.sb-tab) {{
         position: static !important;
+        margin-bottom: -16px !important;
       }}
       .sb-tab {{
         position: absolute;
@@ -166,9 +170,9 @@ def build_theme_css(theme_mode: str) -> str:
         overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
       }}
       .sb-title:hover {{ text-decoration: underline; }}
-      .sb-meta {{ color: var(--ink-faint); font-size: 0.82rem; text-align: right; }}
+      .sb-meta {{ color: var(--ink-faint) !important; font-size: 0.82rem; text-align: right; }}
       .sb-excerpt {{
-        color: var(--ink-soft); font-size: 0.88rem; margin-top: 2px;
+        color: var(--ink-soft) !important; font-size: 0.88rem; margin-top: 2px;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }}
     </style>
