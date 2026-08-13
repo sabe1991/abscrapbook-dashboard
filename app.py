@@ -140,6 +140,13 @@ def build_theme_css(theme_mode: str) -> str:
         position: static !important;
         margin-bottom: -2px !important;
       }}
+      /* タイトルとメタ情報(サイト名・日付)は同じ列(st.columns)の中で縦に並べているが、
+         その列自体もStreamlitの既定の行間ギャップ(16px)を持つため、カード本体と同様に
+         詰めている。:has()はタイトルを含む祖先すべてに一致するため、カード本体(既に2pxを
+         指定済み)にも重複して適用されるが同じ値なので実害はない。 */
+      div[data-testid="stVerticalBlock"]:has(.sb-title) {{
+        gap: 2px !important;
+      }}
       .sb-tab {{
         position: absolute;
         left: 0; top: 0; bottom: 0;
@@ -171,6 +178,17 @@ def build_theme_css(theme_mode: str) -> str:
         color: var(--ink) !important;
         border: 1px solid var(--border-strong) !important;
       }}
+      /* ボタンの文字は内部の<p>要素が実際に描画しており、その<p>自身にも
+         `.stApp *`(本文用の文字色を全要素に強制する既定ルール)が直接効いてしまう。
+         ボタン自体に color を指定するだけでは負けてしまうため、
+         「ボタンの中の全要素」にも同じ色を明示して上書きしている(背景/枠線は
+         ボタン自体にだけあればよいのでここでは文字色のみ)。 */
+      button[kind="primary"] *, [data-testid="stBaseButton-primary"] * {{
+        color: var(--accent-ink) !important;
+      }}
+      button[kind="secondary"] *, [data-testid="stBaseButton-secondary"] * {{
+        color: var(--ink) !important;
+      }}
 
       div[data-testid="stTextInput"] input {{
         background: var(--surface);
@@ -184,7 +202,7 @@ def build_theme_css(theme_mode: str) -> str:
         overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
       }}
       .sb-title:hover {{ text-decoration: underline; }}
-      .sb-meta {{ color: var(--ink-faint) !important; font-size: 0.82rem; text-align: right; }}
+      .sb-meta {{ color: var(--ink-faint) !important; font-size: 0.82rem; margin-top: 1px; }}
       .sb-excerpt {{
         color: var(--ink-soft) !important; font-size: 0.88rem;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -501,20 +519,18 @@ for a in page_articles:
         tab_color = folder_tab_color(a["collectionId"], collection_ids_sorted)
         st.markdown(f'<div class="sb-tab" style="background:{tab_color}"></div>', unsafe_allow_html=True)
 
-        cols = st.columns([9, 1.6, 1], vertical_alignment="center")
+        cols = st.columns([10, 1], vertical_alignment="top")
 
         with cols[0]:
             st.markdown(
                 f'<a class="sb-title" href="{escape(a["url"])}" target="_blank" rel="noopener">{escape(a["title"])}</a>',
                 unsafe_allow_html=True,
             )
-
-        with cols[1]:
             meta_parts = [a["siteName"]] if a.get("siteName") else []
             meta_parts.append(format_date(a["savedAt"]))
             st.markdown(f'<div class="sb-meta">{escape(" ・ ".join(meta_parts))}</div>', unsafe_allow_html=True)
 
-        with cols[2]:
+        with cols[1]:
             with st.popover("⋯", use_container_width=True):
                 current = a["collectionId"] if a["collectionId"] is not None else FOLDER_UNCLASSIFIED
 
