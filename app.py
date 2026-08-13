@@ -125,7 +125,7 @@ def build_theme_css(theme_mode: str) -> str:
         border-radius: 10px;
         margin-bottom: 0.35rem;
         padding: 0.7rem 1.1rem 0.7rem 1.5rem !important;
-        gap: 2px !important;
+        gap: 6px !important;
       }}
       /* .sb-tab(フォルダ色タブ)は絶対配置でカード全体(枠付きの stVerticalBlock)の
          左端いっぱいに伸ばしたいが、st.markdown()が生成する中間の
@@ -138,13 +138,13 @@ def build_theme_css(theme_mode: str) -> str:
          margin-bottomで打ち消している(タブは見た目上の行を持たないため0でよい)。 */
       div[data-testid="stElementContainer"]:has(.sb-tab) {{
         position: static !important;
-        margin-bottom: -2px !important;
+        margin-bottom: -6px !important;
       }}
       /* タイトルとメタ情報(サイト名・日付)は同じ列(st.columns)の中で縦に並べているが、
-         その列自体もStreamlitの既定の行間ギャップ(16px)を持つため、カード本体と同様に
-         詰めている。:has()はタイトルを含む祖先すべてに一致するため、カード本体(既に2pxを
-         指定済み)にも重複して適用されるが同じ値なので実害はない。 */
-      div[data-testid="stVerticalBlock"]:has(.sb-title) {{
+         その列自体もStreamlitの既定の行間ギャップ(16px)を持つため、カード本体(枠付き)と
+         同様に詰めている。stColumnの内側だけに絞ることで、カード本体側のgap(上で6pxに
+         指定、行と要約の間隔用)とは別に調整できるようにしている。 */
+      div[data-testid="stColumn"] div[data-testid="stVerticalBlock"]:has(.sb-title) {{
         gap: 2px !important;
       }}
       .sb-tab {{
