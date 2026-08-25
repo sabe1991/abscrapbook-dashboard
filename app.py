@@ -196,6 +196,22 @@ def build_theme_css(theme_mode: str) -> str:
         border-color: var(--border-strong) !important;
       }}
 
+      /* st.multiselect/st.selectbox(タグ絞り込み・フォルダ移動先)はBaseWebの
+         コンポーネントで、上のstTextInput向けの指定が効かず背景が白いまま残るため、
+         プレースホルダーや文字がダークモードで見えなくなっていた。ドロップダウンの
+         選択肢一覧は別要素としてbody直下に描画されるため、背景はそちらも合わせて
+         上書きする必要がある。 */
+      div[data-baseweb="select"] > div {{
+        background: var(--surface) !important;
+        border-color: var(--border-strong) !important;
+      }}
+      div[data-baseweb="popover"], ul[data-baseweb="menu"] {{
+        background: var(--surface) !important;
+      }}
+      ul[data-baseweb="menu"] li:hover {{
+        background: var(--surface-2) !important;
+      }}
+
       .sb-title {{
         display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
         font-weight: 600; font-size: 1.02rem; text-decoration: none; color: var(--ink);
@@ -211,9 +227,19 @@ def build_theme_css(theme_mode: str) -> str:
     """
 
 
-# 配色トグル(サイドバー)の値をCSS生成より先に読む。key="theme_mode"のウィジェット自体は
-# サイドバー描画時(このスクリプトの後半)に作るが、session_stateには前回の選択が
-# 既に反映されているため、ここで先読みしても正しい値が取れる。
+# 配色トグル(サイドバー)。URL保存フォームのst.rerun()より前にこのウィジェットを
+# 登録しておく必要がある。登録前にrerunでスクリプトが中断されると、次の実行では
+# このtheme_modeがまだ未登録の状態でCSS生成(直後の行)が走ってしまい、
+# 「ラジオボタンの見た目はライトのままなのに配色だけダークに戻る」不具合になるため。
+with st.sidebar:
+    st.radio(
+        "配色",
+        options=["自動", "ライト", "ダーク"],
+        key="theme_mode",
+        horizontal=True,
+    )
+    st.divider()
+
 st.markdown(build_theme_css(st.session_state.get("theme_mode", "自動")), unsafe_allow_html=True)
 
 
@@ -336,15 +362,21 @@ for key, default in (
 qp = st.query_params
 prefill_url = qp.get("url", "") if qp.get("action") == "save" else ""
 
+if "save_url_input_seq" not in st.session_state:
+    st.session_state["save_url_input_seq"] = 0
+
 with st.container(border=True):
     st.caption("URLを保存")
     save_col, btn_col = st.columns([5, 1], vertical_alignment="bottom")
     with save_col:
+        # 保存成功のたびにキーを変えて別ウィジェット扱いにする。同じキーのまま
+        # session_stateを削除するだけだと、ブラウザ側に残った入力値が復元されて
+        # 消えないことがあるため。
         url_value = st.text_input(
             "保存したいページのURL",
             value=prefill_url,
             placeholder="保存したいページのURLを貼り付け、またはブックマークレットで開く",
-            key="save_url_input",
+            key=f"save_url_input_{st.session_state['save_url_input_seq']}",
             label_visibility="collapsed",
         )
     with btn_col:
@@ -359,10 +391,15 @@ if save_clicked:
     if not url_value.strip():
         st.warning("URLを入力してください")
     elif queue_command({"type": "save", "url": url_value.strip()}):
-        st.success("保存の指示を送信しました。次にスマホでAB Scrapbookを開くと取り込まれます。")
-        del st.session_state["save_url_input"]
+        # st.success()の直後にst.rerun()すると再実行でメッセージが即座に消え、
+        # 一瞬しか表示されなくなるため、フラグに記録して再実行後の描画で表示する。
+        st.session_state["save_success"] = True
+        st.session_state["save_url_input_seq"] += 1
         st.query_params.clear()
         st.rerun()
+
+if st.session_state.pop("save_success", False):
+    st.success("保存の指示を送信しました。次にスマホでAB Scrapbookを開くと取り込まれます。")
 
 st.divider()
 
@@ -418,14 +455,6 @@ for a in arts:
 tag_options = sorted(tag_counts.keys(), key=lambda t: (-tag_counts[t], t))
 
 with st.sidebar:
-    st.radio(
-        "配色",
-        options=["自動", "ライト", "ダーク"],
-        key="theme_mode",
-        horizontal=True,
-    )
-    st.divider()
-
     query = st.text_input("検索", placeholder="タイトル・要約を検索", label_visibility="collapsed")
 
     st.subheader("フォルダ")
