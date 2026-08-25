@@ -130,6 +130,26 @@ def build_theme_css(theme_mode: str) -> str:
         padding: 0.7rem 1.1rem 0.7rem 1.5rem !important;
         gap: 6px !important;
       }}
+      /* 「URLを保存」ボックスだけスクロールしても画面上部(ヘッダーの下)に固定表示する。
+         .url-save-marker(このボックスの中にだけ埋め込んだ目印要素)を:has()で
+         見つけ、枠付きコンテナ(上のst-emotion-cache-1nk6pcg)を絞り込んでいる。
+         Streamlitの実際のスクロール領域はwindowではなく
+         section[data-testid="stMain"]自身(ヘッダーはその外側に固定表示される)
+         のため、top:0だけでヘッダーの直下にちょうど収まる。 */
+      div[data-testid="stVerticalBlock"].st-emotion-cache-1nk6pcg:has(.url-save-marker) {{
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 4px 8px -4px rgba(0, 0, 0, 0.25);
+      }}
+      /* position: stickyの可動範囲は自分の親要素の高さに制限される。この直上の
+         data-testid="stLayoutWrapper" はこのボックス専用でボックスと同じ高さしか
+         無いため、そのままだと「固定できる余地」が無く実質固定されない。
+         display: contents でこのラッパーをボックスツリーから外し、
+         もう1つ上の(記事一覧まで含む)背の高い親を基準にして初めて機能する。 */
+      div[data-testid="stLayoutWrapper"]:has(.url-save-marker) {{
+        display: contents;
+      }}
       /* .sb-tab(フォルダ色タブ)は絶対配置でカード全体(枠付きの stVerticalBlock)の
          左端いっぱいに伸ばしたいが、st.markdown()が生成する中間の
          data-testid="stElementContainer" が position: relative かつ高さ0で挟まっており、
@@ -369,6 +389,7 @@ if "save_url_input_seq" not in st.session_state:
     st.session_state["save_url_input_seq"] = 0
 
 with st.container(border=True):
+    st.markdown('<div class="url-save-marker"></div>', unsafe_allow_html=True)
     st.caption("URLを保存")
     save_col, btn_col = st.columns([5, 1], vertical_alignment="bottom")
     with save_col:
