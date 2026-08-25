@@ -133,12 +133,15 @@ def build_theme_css(theme_mode: str) -> str:
       /* 「URLを保存」ボックスだけスクロールしても画面上部(ヘッダーの下)に固定表示する。
          .url-save-marker(このボックスの中にだけ埋め込んだ目印要素)を:has()で
          見つけ、枠付きコンテナ(上のst-emotion-cache-1nk6pcg)を絞り込んでいる。
-         Streamlitの実際のスクロール領域はwindowではなく
-         section[data-testid="stMain"]自身(ヘッダーはその外側に固定表示される)
-         のため、top:0だけでヘッダーの直下にちょうど収まる。 */
+         Streamlitのヘッダー(data-testid="stHeader")はposition: fixed相当で
+         スクロール領域(section[data-testid="stMain"])の手前にz-indexで重ねて
+         描画されている(スクロール領域自体はヘッダーの高さぶん下にずれているわけ
+         ではない)ため、top: 0のままだと固定時にヘッダーの裏に半分ほど隠れてしまう。
+         ヘッダーの高さ(60px、Streamlitのバージョンが上がると変わる可能性あり)ぶん
+         topをずらして、ヘッダーの直下に来るようにする。 */
       div[data-testid="stVerticalBlock"].st-emotion-cache-1nk6pcg:has(.url-save-marker) {{
         position: sticky;
-        top: 0;
+        top: 60px;
         z-index: 100;
         box-shadow: 0 4px 8px -4px rgba(0, 0, 0, 0.25);
       }}
