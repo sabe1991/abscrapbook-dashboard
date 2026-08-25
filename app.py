@@ -83,6 +83,9 @@ def build_theme_css(theme_mode: str) -> str:
       {root_block}
 
       html, body, .stApp {{ background: var(--bg); color: var(--ink); }}
+      /* ページ上部のStreamlit標準ヘッダー(メニュー・Deployボタンのバー)は既定で
+         白背景のままになり、ダークモードだと1本だけ白く浮いて見えるため合わせる。 */
+      [data-testid="stHeader"] {{ background: var(--bg) !important; }}
       .stApp, .stApp p, .stApp span, .stApp label {{
         font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", -apple-system, "Segoe UI", Roboto, sans-serif;
       }}
