@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from html import escape
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from github_client import RepoConfig, get_json, put_json
 
@@ -165,6 +166,11 @@ def build_theme_css(theme_mode: str) -> str:
          指定、行と要約の間隔用)とは別に調整できるようにしている。 */
       div[data-testid="stColumn"] div[data-testid="stVerticalBlock"]:has(.sb-title) {{
         gap: 2px !important;
+      }}
+      /* .sb-list-top(ページ送り後のスクロール先の目印)は高さ0の空要素だが、
+         そのままだとStreamlitの行間ギャップ(16px)ぶんの隙間が空いてしまうため打ち消す。 */
+      div[data-testid="stElementContainer"]:has(.sb-list-top) {{
+        margin-bottom: -16px !important;
       }}
       .sb-tab {{
         position: absolute;
@@ -521,6 +527,8 @@ def matches(a: dict) -> bool:
 visible = [a for a in arts if matches(a)]
 
 header_title = "すべての記事" if selected_folder == FOLDER_ALL else folder_names.get(selected_folder, "?")
+# ページ送り後にここまでスクロールを戻す(見出し・件数・ページ送りボタンごと画面に入る)。
+st.markdown('<div class="sb-list-top"></div>', unsafe_allow_html=True)
 st.markdown(f"**{header_title}**")
 
 # 記事が数千件規模になると、1件ごとにポップオーバー等の重いウィジェットを持つカードを
@@ -543,6 +551,58 @@ if not visible:
     st.info("条件に一致する記事がありません。")
 
 
+# StreamlitにはPython側から画面のスクロール位置を動かすAPIが無いため、高さ0のiframe
+# (components.html)を挿し込み、その中から親ドキュメント(=アプリ本体。srcdocのiframeなので
+# 同一オリジンとして触れる)を操作している。
+# __SEQ__ はページ送りのたびに変わる使い捨ての値。これが無いと生成HTMLが前回と同一になり、
+# Streamlitがiframeを作り直さないため、2回続けてページ送りしたときに2回目が効かない。
+SCROLL_TO_LIST_TOP_JS = """
+<script>
+(function () {
+  var seq = __SEQ__;
+  var parentWin = window.parent;
+  var doc = parentWin.document;
+  var tries = 0;
+  function scrollToListTop() {
+    var anchor = doc.querySelector(".sb-list-top");
+    if (!anchor) {
+      // 描画が終わる前に走ることがあるので、見つかるまで少し待って繰り返す。
+      if (tries++ < 40) { parentWin.setTimeout(scrollToListTop, 50); }
+      return;
+    }
+    // 「URLを保存」ボックスは画面上部に固定表示(sticky)されるため、その高さと
+    // Streamlitヘッダー(60px)のぶんだけ手前で止めないと一覧の先頭が隠れてしまう。
+    var stickyBox = doc.querySelector(".url-save-marker");
+    stickyBox = stickyBox ? stickyBox.closest("div[data-testid='stVerticalBlock']") : null;
+    var offset = 60 + (stickyBox ? stickyBox.getBoundingClientRect().height : 0) + 8;
+    // スクロールしている器はwindowではなくStreamlitの本文領域なので、
+    // アンカーから遡って実際にスクロールできる祖先を探す。
+    var box = anchor.parentElement;
+    while (box && box !== doc.body) {
+      var style = parentWin.getComputedStyle(box);
+      if (/(auto|scroll)/.test(style.overflowY) && box.scrollHeight > box.clientHeight) { break; }
+      box = box.parentElement;
+    }
+    if (box && box !== doc.body) {
+      var top = anchor.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - offset;
+      box.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    } else {
+      var y = anchor.getBoundingClientRect().top + parentWin.scrollY - offset;
+      parentWin.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    }
+  }
+  scrollToListTop();
+})();
+</script>
+"""
+
+
+def request_scroll_to_list_top() -> None:
+    seq = st.session_state.get("_scroll_seq", 0) + 1
+    st.session_state["_scroll_seq"] = seq
+    st.session_state["_scroll_to_list_top"] = seq
+
+
 def render_pagination(position: str) -> None:
     if total_pages <= 1:
         return
@@ -550,6 +610,7 @@ def render_pagination(position: str) -> None:
     with prev_col:
         if st.button("← 前へ", disabled=page <= 1, use_container_width=True, key=f"prev_{position}_{page}"):
             st.session_state["page"] = page - 1
+            request_scroll_to_list_top()
             st.rerun()
     with mid_col:
         st.markdown(
@@ -559,6 +620,7 @@ def render_pagination(position: str) -> None:
     with next_col:
         if st.button("次へ →", disabled=page >= total_pages, use_container_width=True, key=f"next_{position}_{page}"):
             st.session_state["page"] = page + 1
+            request_scroll_to_list_top()
             st.rerun()
 
 
@@ -632,3 +694,9 @@ for a in page_articles:
             st.markdown(html, unsafe_allow_html=True)
 
 render_pagination("bottom")
+
+# ページ送りの直後だけ、記事一覧の先頭までスクロールし直す。すべて描画し終えてから
+# 動かしたいので、スクリプトの最後で呼ぶ。
+scroll_seq = st.session_state.pop("_scroll_to_list_top", None)
+if scroll_seq is not None:
+    components.html(SCROLL_TO_LIST_TOP_JS.replace("__SEQ__", str(scroll_seq)), height=0)
