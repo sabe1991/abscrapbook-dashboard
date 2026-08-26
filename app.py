@@ -44,8 +44,8 @@ FOLDER_UNCLASSIFIED = "__unclassified__"
 st.set_page_config(page_title="スクラップブックダッシュボード", page_icon=":material/bookmarks:", layout="wide")
 
 # デザイン案(モックアップ)で承認した配色・タイポグラフィをここで再現する。
-# ライト/ダークそれぞれの色をCSS変数として定義し、"自動"時はOSの配色設定(prefers-color-scheme)に
-# 追従、ライト/ダークを明示選択した場合はそちらを強制する。
+# ライト/ダークそれぞれの色をCSS変数として定義し、サイドバーで選ばれた方を強制する。
+# 既定はライト(`.streamlit/config.toml` のベース配色ともそろえている)。
 PALETTE = {
     "light": {
         "bg": "#e7ebe1", "surface": "#ffffff", "surface-2": "#edf1e7",
@@ -69,15 +69,8 @@ def _css_vars(palette: dict) -> str:
 
 
 def build_theme_css(theme_mode: str) -> str:
-    if theme_mode == "ライト":
-        root_block = f":root {{ {_css_vars(PALETTE['light'])} }}"
-    elif theme_mode == "ダーク":
-        root_block = f":root {{ {_css_vars(PALETTE['dark'])} }}"
-    else:
-        root_block = (
-            f":root {{ {_css_vars(PALETTE['light'])} }}"
-            f"@media (prefers-color-scheme: dark) {{ :root {{ {_css_vars(PALETTE['dark'])} }} }}"
-        )
+    palette = PALETTE["dark"] if theme_mode == "ダーク" else PALETTE["light"]
+    root_block = f":root {{ {_css_vars(palette)} }}"
     return f"""
     <style>
       {root_block}
@@ -89,7 +82,7 @@ def build_theme_css(theme_mode: str) -> str:
       .stApp, .stApp p, .stApp span, .stApp label {{
         font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", -apple-system, "Segoe UI", Roboto, sans-serif;
       }}
-      /* StreamlitはOSのダーク設定を見て自前で文字色を決めてしまうため、"自動/ライト/ダーク"の
+      /* StreamlitはOSのダーク設定を見て自前で文字色を決めてしまうため、"ライト/ダーク"の
          切り替え(session_state.theme_mode)を効かせるには、この配下の文字色を強制で塗り直す必要がある。
          (.streamlit/config.toml で基準色は合わせているが、切り替え時はこちらが優先される) */
       .stApp, .stApp * {{ color: var(--ink) !important; }}
@@ -260,13 +253,13 @@ def build_theme_css(theme_mode: str) -> str:
 with st.sidebar:
     st.radio(
         "配色",
-        options=["自動", "ライト", "ダーク"],
+        options=["ライト", "ダーク"],
         key="theme_mode",
         horizontal=True,
     )
     st.divider()
 
-st.markdown(build_theme_css(st.session_state.get("theme_mode", "自動")), unsafe_allow_html=True)
+st.markdown(build_theme_css(st.session_state.get("theme_mode", "ライト")), unsafe_allow_html=True)
 
 
 # ---- GitHub 連携の設定 ----
@@ -431,6 +424,9 @@ if st.session_state.pop("save_success", False):
 st.divider()
 
 
+# do_move / do_delete はボタンの on_click コールバックとして呼ばれる。コールバックが終わると
+# Streamlitが自動で再実行するため、この中でst.rerun()を呼んではいけない
+#(「Calling st.rerun() within a callback is a no-op.」の警告が出るだけで何も起きない)。
 def do_move(article_id: int, target_key) -> None:
     target_collection_id = None if target_key == FOLDER_UNCLASSIFIED else target_key
     command = {"type": "move", "articleId": article_id, "collectionId": target_collection_id}
@@ -438,7 +434,6 @@ def do_move(article_id: int, target_key) -> None:
         st.session_state.pending_moves[article_id] = target_collection_id
         st.session_state.confirm_delete_id = None
         st.toast(f"「{folder_names.get(target_key, '?')}」への移動を送信しました", icon=":material/drive_file_move:")
-        st.rerun()
 
 
 def do_delete(article_id: int) -> None:
@@ -446,7 +441,6 @@ def do_delete(article_id: int) -> None:
         st.session_state.pending_deletes.add(article_id)
         st.session_state.confirm_delete_id = None
         st.toast("削除の指示を送信しました", icon=":material/delete:")
-        st.rerun()
 
 
 # 移動・削除の指示はまだGitHub上のlatest.jsonには反映されない(スマホが次に起動したときに反映される
