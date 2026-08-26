@@ -485,10 +485,13 @@ with st.sidebar:
     query = st.text_input("検索", placeholder="タイトル・要約を検索", label_visibility="collapsed")
 
     st.subheader("フォルダ")
+    # 未整理の記事を片付けるのが主な使い方なので、初回表示は「すべて」ではなく「未分類」を選ぶ。
+    # (keyを付けているため、indexが効くのはsession_stateがまだ無い初回表示のときだけ。)
     selected_folder = st.radio(
         "フォルダ",
         options=folder_options,
         format_func=lambda k: f"{folder_names.get(k, '?')} ({folder_counts.get(k, 0)})",
+        index=folder_options.index(FOLDER_UNCLASSIFIED),
         key="selected_folder",
         label_visibility="collapsed",
     )
