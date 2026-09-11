@@ -433,13 +433,24 @@ st.divider()
 # do_move / do_delete はボタンの on_click コールバックとして呼ばれる。コールバックが終わると
 # Streamlitが自動で再実行するため、この中でst.rerun()を呼んではいけない
 #(「Calling st.rerun() within a callback is a no-op.」の警告が出るだけで何も起きない)。
-def do_move(article_id: int, target_key) -> None:
+def do_move(article_id: int, target_key) -> bool:
     target_collection_id = None if target_key == FOLDER_UNCLASSIFIED else target_key
     command = {"type": "move", "articleId": article_id, "collectionId": target_collection_id}
-    if queue_command(command):
-        st.session_state.pending_moves[article_id] = target_collection_id
-        st.session_state.confirm_delete_id = None
-        st.toast(f"「{folder_names.get(target_key, '?')}」への移動を送信しました", icon=":material/drive_file_move:")
+    if not queue_command(command):
+        return False
+    st.session_state.pending_moves[article_id] = target_collection_id
+    st.session_state.confirm_delete_id = None
+    st.toast(f"「{folder_names.get(target_key, '?')}」への移動を送信しました", icon=":material/drive_file_move:")
+    return True
+
+
+def on_move_select(article_id: int, current_key) -> None:
+    # 移動先のセレクトボックスで選んだ時点で即座に移動する(確認ボタンは挟まない)。
+    # 送信に失敗したら、選択表示だけ変わったままにならないよう元のフォルダに戻す。
+    widget_key = f"move_{article_id}"
+    target_key = st.session_state[widget_key]
+    if target_key != current_key and not do_move(article_id, target_key):
+        st.session_state[widget_key] = current_key
 
 
 def do_delete(article_id: int) -> None:
@@ -650,22 +661,16 @@ for a in page_articles:
                 current = a["collectionId"] if a["collectionId"] is not None else FOLDER_UNCLASSIFIED
 
                 st.caption("移動")
-                target = st.selectbox(
+                st.selectbox(
                     "移動先",
                     options=move_options,
                     index=move_options.index(current) if current in move_options else 0,
                     format_func=lambda k: folder_names.get(k, "?"),
                     key=f"move_{a['id']}",
                     label_visibility="collapsed",
+                    on_change=on_move_select,
+                    args=(a["id"], current),
                 )
-                if target != current:
-                    st.button(
-                        f"「{folder_names.get(target, '?')}」に移動する",
-                        key=f"move_btn_{a['id']}",
-                        use_container_width=True,
-                        on_click=do_move,
-                        args=(a["id"], target),
-                    )
 
                 st.divider()
                 if st.session_state.confirm_delete_id == a["id"]:
