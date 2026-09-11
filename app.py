@@ -382,13 +382,32 @@ for key, default in (
         st.session_state[key] = default
 
 # ---- URLを保存(ブックマークレット経由の保存フロー) ----
-# ブックマークレットは `?action=save&url=<現在のページURL>` を付けてこのページを開く。
+# ブックマークレットは `?action=save&url=<現在のページURL>` を付けてこのページを新しいタブで開く。
+# 開いた時点で自動保存し、「保存する」をもう一度押さなくて済むようにしている。
 # トークンはブラウザ側に一切渡らず、書き込みは常にこのサーバー側で行う。
 qp = st.query_params
-prefill_url = qp.get("url", "") if qp.get("action") == "save" else ""
+prefill_url = qp.get("url", "").strip() if qp.get("action") == "save" else ""
 
 if "save_url_input_seq" not in st.session_state:
     st.session_state["save_url_input_seq"] = 0
+
+
+def finish_save(url: str) -> None:
+    # st.success()の直後にst.rerun()すると再実行でメッセージが即座に消え、
+    # 一瞬しか表示されなくなるため、フラグに記録して再実行後の描画で表示する。
+    # クエリパラメータも消して、リロードしても同じURLが二重に保存されないようにする。
+    st.session_state["save_success"] = url
+    st.session_state["save_url_input_seq"] += 1
+    st.query_params.clear()
+    st.rerun()
+
+
+# 自動保存は1つのURLにつき1回だけ試みる。送信に失敗しても再実行のたびに送り直さないよう
+# 試行済みとして記録し、URLは入力欄に残して「保存する」ボタンで手動で再送できるようにする。
+if prefill_url and st.session_state.get("auto_save_tried") != prefill_url:
+    st.session_state["auto_save_tried"] = prefill_url
+    if queue_command({"type": "save", "url": prefill_url}):
+        finish_save(prefill_url)
 
 with st.container(border=True):
     st.markdown('<div class="url-save-marker"></div>', unsafe_allow_html=True)
@@ -408,24 +427,18 @@ with st.container(border=True):
     with btn_col:
         save_clicked = st.button("保存する", type="primary", use_container_width=True)
     if prefill_url:
-        st.caption(
-            "ブックマークレットから開いたため、いま見ていたページのURLを自動で入力しました。"
-            "トークン(合言葉)はこのページ自体には渡らず、保存はサーバー側で行われます。"
-        )
+        # 自動保存に成功した場合は再実行でクエリパラメータが消えるため、ここに来るのは失敗したときだけ。
+        st.caption("ブックマークレットから開いたURLの自動保存に失敗しました。「保存する」で再送できます。")
 
 if save_clicked:
     if not url_value.strip():
         st.warning("URLを入力してください")
     elif queue_command({"type": "save", "url": url_value.strip()}):
-        # st.success()の直後にst.rerun()すると再実行でメッセージが即座に消え、
-        # 一瞬しか表示されなくなるため、フラグに記録して再実行後の描画で表示する。
-        st.session_state["save_success"] = True
-        st.session_state["save_url_input_seq"] += 1
-        st.query_params.clear()
-        st.rerun()
+        finish_save(url_value.strip())
 
-if st.session_state.pop("save_success", False):
-    st.success("保存の指示を送信しました。次にスマホでAB Scrapbookを開くと取り込まれます。")
+saved_url = st.session_state.pop("save_success", None)
+if saved_url:
+    st.success(f"保存の指示を送信しました: `{saved_url}`  \n次にスマホでAB Scrapbookを開くと取り込まれます。")
 
 st.divider()
 
