@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import time
 import uuid
 from datetime import datetime, timezone
 from html import escape
+from urllib.parse import quote, urlsplit
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -38,6 +40,11 @@ SAMPLE_CANDIDATES = [
     os.path.join(HERE, "sample-data", "latest.json"),
 ]
 DATA_PATH = "latest.json"
+# 記事のサムネイル画像URL・リンク切れ判定。スマホアプリではなく巡回スクリプト(`../enricher/`、
+# データ用リポジトリのGitHub Actionsで毎日実行)が作る別ファイルで、URLをキーにしている。
+# 無くても動く(サムネイル・リンク切れ表示が出ないだけ)。
+ENRICH_PATH = "enrich.json"
+ENRICH_SAMPLE_CANDIDATES = [os.path.join(os.path.dirname(p), "enrich.json") for p in SAMPLE_CANDIDATES]
 
 FOLDER_ALL = "__all__"
 FOLDER_UNCLASSIFIED = "__unclassified__"
@@ -248,6 +255,23 @@ def build_theme_css(theme_mode: str) -> str:
         color: var(--ink-soft) !important; font-size: 0.88rem;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }}
+      /* サムネイル。背景にファビコンを敷き、その上にog:imageを重ねる。画像が無い・
+         読み込めない記事でも、サイトのアイコンが見えるようにしている
+         (alt=""の画像は読み込みに失敗すると何も描画されないため、下のアイコンが透ける)。 */
+      .sb-thumb {{
+        width: 100%; aspect-ratio: 4 / 3; border-radius: 6px; overflow: hidden;
+        background-color: var(--surface-2); background-position: center;
+        background-size: 28px; background-repeat: no-repeat;
+      }}
+      .sb-thumb img {{ width: 100%; height: 100%; object-fit: cover; display: block; }}
+      /* Streamlitはマークダウン要素の下端に-16pxの余白を付けるため、サイト名の行の直下に
+         要約を置くと上に食い込んで重なる。この行だけ打ち消す。 */
+      div[data-testid="stMarkdownContainer"]:has(.sb-meta) {{ margin-bottom: 0 !important; }}
+      .sb-favicon {{ width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; border-radius: 3px; }}
+      .sb-dead {{
+        display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px;
+        font-size: 0.75rem; background: var(--surface-2); border: 1px solid var(--border-strong);
+      }}
     </style>
     """
 
@@ -297,6 +321,29 @@ def fetch_data(cfg: RepoConfig) -> dict:
             "まだ記事データがアップロードされていません。スマホでAB Scrapbookを一度起動してください"
         )
     return data
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_enrich(cfg: RepoConfig) -> dict:
+    data, _sha = get_json(cfg, ENRICH_PATH)
+    return (data or {}).get("items", {})
+
+
+def load_enrich(source: str) -> dict:
+    """URL → {"image": 画像URL, "dead": リンク切れか} の辞書。取れなければ空(表示が減るだけ)。"""
+    cfg = data_cfg()
+    if source == "GitHub" and cfg is not None:
+        try:
+            return fetch_enrich(cfg)
+        except Exception:
+            return {}
+    for path in ENRICH_SAMPLE_CANDIDATES:
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f).get("items", {})
+        except FileNotFoundError:
+            continue
+    return {}
 
 
 def load_data() -> tuple[dict, str]:
@@ -360,9 +407,32 @@ def folder_tab_color(collection_id, collection_ids_sorted: list) -> str:
     return FOLDER_TAB_PALETTE[idx % len(FOLDER_TAB_PALETTE)]
 
 
+def site_domain(url: str) -> str:
+    host = urlsplit(url).hostname or ""
+    return host[4:] if host.startswith("www.") else host
+
+
+def favicon_url(domain: str) -> str:
+    # サイト名(siteName)が入っている記事は全体の1%未満のため、URLから必ず作れる
+    # ドメイン名とファビコンを「どこの記事か」の手がかりにしている。
+    return f"https://www.google.com/s2/favicons?domain={quote(domain)}&sz=64"
+
+
+def wayback_url(url: str, saved_at_millis: int) -> str:
+    # 保存日を指定すると、Wayback Machineがその日に一番近い保存版へ転送してくれる。
+    stamp = datetime.fromtimestamp(saved_at_millis / 1000, tz=timezone.utc).strftime("%Y%m%d")
+    return f"https://web.archive.org/web/{stamp}/{url}"
+
+
+def saved_year_month(saved_at_millis: int) -> tuple[int, int]:
+    dt = datetime.fromtimestamp(saved_at_millis / 1000, tz=timezone.utc).astimezone()
+    return dt.year, dt.month
+
+
 # ---- 画面 ----
 
 backup, source = load_data()
+enrich = load_enrich(source)
 if source != "GitHub":
     st.info(
         f"現在は{source}を表示しています。本番の記事を出すには、GitHub連携の設定(secrets)が必要です。"
@@ -531,6 +601,50 @@ with st.sidebar:
     )
     st.caption(f"タグは{len(tag_options)}件あります。入力すると絞り込めます。")
 
+    st.subheader("保存した時期")
+    year_counts: dict[int, int] = {}
+    for a in arts:
+        y, _m = saved_year_month(a["savedAt"])
+        year_counts[y] = year_counts.get(y, 0) + 1
+    year_options = [None] + sorted(year_counts, reverse=True)
+    selected_year = st.selectbox(
+        "年",
+        options=year_options,
+        format_func=lambda y: "すべての年" if y is None else f"{y}年 ({year_counts[y]})",
+        key="selected_year",
+        label_visibility="collapsed",
+    )
+    selected_month = None
+    if selected_year is not None:
+        month_counts: dict[int, int] = {}
+        for a in arts:
+            y, m = saved_year_month(a["savedAt"])
+            if y == selected_year:
+                month_counts[m] = month_counts.get(m, 0) + 1
+        selected_month = st.selectbox(
+            "月",
+            options=[None] + sorted(month_counts),
+            format_func=lambda m: "すべての月" if m is None else f"{m}月 ({month_counts[m]})",
+            key=f"selected_month_{selected_year}",
+            label_visibility="collapsed",
+        )
+
+    st.subheader("並び順")
+    sort_order = st.radio(
+        "並び順",
+        options=["新しい順", "古い順", "シャッフル"],
+        key="sort_order",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    if sort_order == "シャッフル":
+        # 並びはシードで固定し、移動・削除などの再実行のたびに並びが変わらないようにする。
+        if "shuffle_seed" not in st.session_state:
+            st.session_state["shuffle_seed"] = random.randrange(1 << 30)
+        if st.button("🔀 並べ直す", use_container_width=True):
+            st.session_state["shuffle_seed"] = random.randrange(1 << 30)
+            st.session_state["page"] = 1
+
 
 def matches(a: dict) -> bool:
     if selected_folder == FOLDER_UNCLASSIFIED:
@@ -541,6 +655,10 @@ def matches(a: dict) -> bool:
             return False
     if selected_tags and not set(selected_tags).issubset(set(a.get("tags", []))):
         return False
+    if selected_year is not None:
+        y, m = saved_year_month(a["savedAt"])
+        if y != selected_year or (selected_month is not None and m != selected_month):
+            return False
     if query.strip():
         haystack = " ".join([a["title"], a.get("summary") or "", a.get("excerpt") or ""]).lower()
         if query.strip().lower() not in haystack:
@@ -549,6 +667,13 @@ def matches(a: dict) -> bool:
 
 
 visible = [a for a in arts if matches(a)]
+if sort_order == "古い順":
+    visible.reverse()
+elif sort_order == "シャッフル":
+    # 記事ごとに(シード, 記事ID)から決まる乱数で並べる。一覧をまとめてshuffleすると、
+    # 移動・削除で1件抜けただけで残り全体の並びが入れ替わってしまうため。
+    seed = st.session_state["shuffle_seed"]
+    visible.sort(key=lambda a: random.Random(f"{seed}-{a['id']}").random())
 
 header_title = "すべての記事" if selected_folder == FOLDER_ALL else folder_names.get(selected_folder, "?")
 # ページ送り後にここまでスクロールを戻す(見出し・件数・ページ送りボタンごと画面に入る)。
@@ -558,7 +683,10 @@ st.markdown(f"**{header_title}**")
 # 記事が数千件規模になると、1件ごとにポップオーバー等の重いウィジェットを持つカードを
 # 一度に全件描画すると画面が固まったようになるため、ページ送りで表示件数を区切る。
 ARTICLES_PER_PAGE = 50
-filter_key = (selected_folder, tuple(sorted(selected_tags)), query.strip())
+filter_key = (
+    selected_folder, tuple(sorted(selected_tags)), query.strip(),
+    selected_year, selected_month, sort_order, st.session_state.get("shuffle_seed"),
+)
 if st.session_state.get("_filter_key") != filter_key:
     st.session_state["_filter_key"] = filter_key
     st.session_state["page"] = 1
@@ -658,18 +786,49 @@ for a in page_articles:
         tab_color = folder_tab_color(a["collectionId"], collection_ids_sorted)
         st.markdown(f'<div class="sb-tab" style="background:{tab_color}"></div>', unsafe_allow_html=True)
 
-        cols = st.columns([10, 1], vertical_alignment="top")
+        cols = st.columns([1.4, 9, 1], vertical_alignment="top")
+        domain = site_domain(a["url"])
+        info = enrich.get(a["url"], {})
+        dead = bool(info.get("dead"))
+        # リンク切れの記事は、開いても何も読めないのでWayback Machineの保存版へ飛ばす。
+        href = wayback_url(a["url"], a["savedAt"]) if dead else a["url"]
 
         with cols[0]:
+            image = info.get("image")
+            img_html = (
+                f'<img src="{escape(image)}" alt="" loading="lazy" referrerpolicy="no-referrer">' if image else ""
+            )
             st.markdown(
-                f'<a class="sb-title" href="{escape(a["url"])}" target="_blank" rel="noopener">{escape(a["title"])}</a>',
+                f'<a href="{escape(href)}" target="_blank" rel="noopener">'
+                f'<div class="sb-thumb" style="background-image:url({favicon_url(domain)})">{img_html}</div></a>',
                 unsafe_allow_html=True,
             )
-            meta_parts = [a["siteName"]] if a.get("siteName") else []
-            meta_parts.append(format_date(a["savedAt"]))
-            st.markdown(f'<div class="sb-meta">{escape(" ・ ".join(meta_parts))}</div>', unsafe_allow_html=True)
 
         with cols[1]:
+            st.markdown(
+                f'<a class="sb-title" href="{escape(href)}" target="_blank" rel="noopener">{escape(a["title"])}</a>',
+                unsafe_allow_html=True,
+            )
+            meta_parts = [a.get("siteName") or domain, format_date(a["savedAt"])]
+            dead_html = '<span class="sb-dead" title="元のページは消えています。クリックするとWayback Machineの保存版を開きます">リンク切れ・保存版を開く</span>' if dead else ""
+            st.markdown(
+                f'<div class="sb-meta"><img class="sb-favicon" src="{favicon_url(domain)}" alt="">'
+                f'{escape(" ・ ".join(p for p in meta_parts if p))}{dead_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+            excerpt = a.get("summary") or a.get("excerpt") or ""
+            if excerpt:
+                # summary はAI要約(最大3行の箇条書き、AB Scrapbook側のTHREE_BULLETS出力)、
+                # excerpt は1行要約(ONE_BULLET)。複数行あるときは1行ずつ表示する。
+                lines = [ln.strip().lstrip("*・-•").strip() for ln in excerpt.splitlines() if ln.strip()]
+                if len(lines) > 1:
+                    html = "".join(f'<div class="sb-excerpt">・{escape(ln)}</div>' for ln in lines)
+                else:
+                    html = f'<div class="sb-excerpt">{escape(lines[0] if lines else excerpt)}</div>'
+                st.markdown(html, unsafe_allow_html=True)
+
+        with cols[2]:
             with st.popover("⋯", use_container_width=True):
                 current = a["collectionId"] if a["collectionId"] is not None else FOLDER_UNCLASSIFIED
 
@@ -699,17 +858,6 @@ for a in page_articles:
                     if st.button("削除", key=f"del_{a['id']}", use_container_width=True):
                         st.session_state.confirm_delete_id = a["id"]
                         st.rerun()
-
-        excerpt = a.get("summary") or a.get("excerpt") or ""
-        if excerpt:
-            # summary はAI要約(最大3行の箇条書き、AB Scrapbook側のTHREE_BULLETS出力)、
-            # excerpt は1行要約(ONE_BULLET)。複数行あるときは1行ずつ表示する。
-            lines = [ln.strip().lstrip("*・-•").strip() for ln in excerpt.splitlines() if ln.strip()]
-            if len(lines) > 1:
-                html = "".join(f'<div class="sb-excerpt">・{escape(ln)}</div>' for ln in lines)
-            else:
-                html = f'<div class="sb-excerpt">{escape(lines[0] if lines else excerpt)}</div>'
-            st.markdown(html, unsafe_allow_html=True)
 
 render_pagination("bottom")
 
